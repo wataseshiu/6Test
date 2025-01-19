@@ -1,5 +1,8 @@
-﻿using Cysharp.Threading.Tasks;
+﻿using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
+using MultiPlay;
 using R3;
+using Unity.Netcode;
 
 namespace SceneDirector.GameLoopInstance
 {
@@ -10,5 +13,6 @@ namespace SceneDirector.GameLoopInstance
         public UniTask Initialize();
         public UniTask Execute();
         public UniTask<GameState> Terminate();
+        public UniTask Initialize(MultiPlayManager multiPlayManager);
     }
 }

@@ -1,7 +1,9 @@
-﻿using CanvasController;
+﻿using System.Threading;
+using CanvasController;
 using Cysharp.Threading.Tasks;
 using LobbyManagement;
 using Session;
+using UI;
 using UnityEngine;
 using VContainer.Unity;
 using VContainer;
@@ -10,33 +12,32 @@ namespace SceneDirector
 {
     public class QuickSessionDirector
     {
-        private QuickSessionCanvasController _quickSessionCanvasController;
         private LobbyMaker _lobbyMaker;
         private SessionMaker _sessionMaker;
 
-        public QuickSessionDirector(QuickSessionCanvasController quickSessionCanvasController, LobbyMaker lobbyMaker, SessionMaker sessionMaker)
+        public QuickSessionDirector(LobbyMaker lobbyMaker, SessionMaker sessionMaker)
         {
-            this._quickSessionCanvasController = quickSessionCanvasController;
-            this._lobbyMaker = lobbyMaker;
-            this._sessionMaker = sessionMaker;
+            _lobbyMaker = lobbyMaker;
+            _sessionMaker = sessionMaker;
         }
 
-        public async void CreateQuickJoinSession()
+        public async UniTask CreateQuickJoinSession(DialogCreateSession dialogCreateSession)
         {
-            _quickSessionCanvasController.ShowSessionDialog();
-            await _lobbyMaker.Initialize();
-            await _lobbyMaker.QuickJoinLobby();
+            var ct = dialogCreateSession.Ct;
+            await _lobbyMaker.Initialize(dialogCreateSession.InfoText, ct);
+            await _lobbyMaker.QuickJoinLobby(ct);
             Debug.Log("Lobby Created");
             //ロビーにメンバーが揃うのを待つ
-            _lobbyMaker.HandleLobbyPolling().Forget();
+            _lobbyMaker.HandleLobbyPolling(ct).Forget();
 
-            _lobbyMaker.Heartbeat().Forget();
+            _lobbyMaker.Heartbeat(ct).Forget();
             
-            await _lobbyMaker.IsJoinedFullMember();
+            await _lobbyMaker.IsJoinedFullMember(ct);
 
             await _lobbyMaker.CreateRelay();
 
             await _sessionMaker.IsAllMemberConnectedRelay();
+            dialogCreateSession.InfoText.text = "All Member Connected Relay";
             Debug.Log("All Member Connected Relay");
         }
     }

@@ -62,7 +62,9 @@ namespace Session
 
         public async UniTask IsAllMemberConnectedRelay()
         {
+            Debug.Log("IsAllMemberConnectedRelay");
             await UniTask.WaitUntil(()=> NetworkManager.Singleton.ConnectedClients.Count == 2);
+            Debug.Log("IsAllMemberConnectedRelay2");
         }
     }
 }

@@ -6,12 +6,12 @@ namespace Hand
 {
     public class HandDataSetter
     {
-        public void SetHandData(CardDataList cardDataList, List<CardDataSetter> cardDataSetters)
+        public void SetHandData(CardDataMap cardDataMap, List<CardParameter> cardParameters)
         {
             int count = 0;
-            cardDataSetters.ForEach(cardDataSetter =>
+            cardParameters.ForEach(cardDataSetter =>
             {
-                cardDataSetter.SetCardData(cardDataList.cardDataList[count]);
+                cardDataSetter.InitializeFromCardDataMap(cardDataMap.cardDataList[count]);
                 count++;
             });
         }

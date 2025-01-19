@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using Session;
+using TMPro;
 using Unity.Services.Authentication;
 using Unity.Services.Core;
 using Unity.Services.Lobbies;
@@ -20,6 +22,8 @@ namespace LobbyManagement
         private string playerName;
         public const string KEY_RELAY_CODE = "RelayCode";
 
+        private TextMeshProUGUI sessionInfoMessage;
+        
         private Lobby joinedLobby;
         //ロビー人数が揃ったことを通知するイベント
         private UniTaskCompletionSource _lobbyFullMemberTcs = new UniTaskCompletionSource();
@@ -29,22 +33,59 @@ namespace LobbyManagement
             this._sessionMaker = sessionMaker;
         }
 
-        public async UniTask Initialize()
+        public async UniTask Initialize(TextMeshProUGUI infoText, CancellationToken ct)
         {
-            playerName = "PlayerName" + Random.Range(0, 1000).ToString();
-            InitializationOptions initializationOptions = new InitializationOptions();
-            initializationOptions.SetProfile(playerName);
+            sessionInfoMessage = infoText;
+            sessionInfoMessage.text = "Initializing...";
+            playerName = "PlayerName" + Random.Range(0, 1000);
+
+            try
+            {
+                InitializationOptions initializationOptions = new InitializationOptions();
+                initializationOptions.SetProfile(playerName);
             
-            await UnityServices.InitializeAsync(initializationOptions);
+                await UnityServices.InitializeAsync(initializationOptions);
+                ct.ThrowIfCancellationRequested();
+            }
+            catch (OperationCanceledException e)
+            {
+                Debug.Log("Canceled");
+                throw;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
 
             AuthenticationService.Instance.SignedIn += () =>
             {
                 Debug.Log("Signed in:" + AuthenticationService.Instance.PlayerId);
+                sessionInfoMessage.text = "Signed in:" + AuthenticationService.Instance.PlayerId;
             };
-            await AuthenticationService.Instance.SignInAnonymouslyAsync();
+
+            try
+            {
+                //まだサインインしていなかったら実行
+                if (!AuthenticationService.Instance.IsSignedIn)
+                {
+                    await AuthenticationService.Instance.SignInAnonymouslyAsync();
+                    ct.ThrowIfCancellationRequested();
+                }
+            }
+            catch (OperationCanceledException e)
+            {
+                Debug.Log("Canceled");
+                throw;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+                throw;
+            }
         }
 
-        private async UniTask CreateLobby()
+        private async UniTask CreateLobby(CancellationToken ct)
         {
             try
             {
@@ -67,15 +108,28 @@ namespace LobbyManagement
                 };
                 isHost = true;
                 joinedLobby = await LobbyService.Instance.CreateLobbyAsync(lobbyName, maxPlayers, createLobbyOptions);
+                ct.ThrowIfCancellationRequested();
                 Debug.Log("Lobby created: " + joinedLobby.LobbyCode);
+            }
+            catch (OperationCanceledException e)
+            {
+                Debug.Log("Canceled");
+                
+                //ロビーを削除
+                await LobbyService.Instance.DeleteLobbyAsync(joinedLobby.Id);
+                throw;
             }
             catch (LobbyServiceException e)
             {
                 Debug.Log("Exception:" + e.Message);
+                if(joinedLobby != null)
+                {
+                    await LobbyService.Instance.DeleteLobbyAsync(joinedLobby.Id);
+                }
             }
         }
 
-        public async UniTask QuickJoinLobby()
+        public async UniTask QuickJoinLobby(CancellationToken ct)
         {
             try
             {
@@ -89,16 +143,30 @@ namespace LobbyManagement
                     )
                 };
 
+                sessionInfoMessage.text = "Searching for lobby...";
                 joinedLobby = await LobbyService.Instance.QuickJoinLobbyAsync(options);
+                ct.ThrowIfCancellationRequested();
                 Debug.Log("Lobby joined: " + joinedLobby.LobbyCode);
                 Debug.Log(joinedLobby.Players.Count.ToString());
+                sessionInfoMessage.text = "Lobby joined: " + joinedLobby.LobbyCode;
+            }
+            catch (OperationCanceledException e)
+            {
+                Debug.Log("Canceled");
+                //ロビーを削除
+                await LobbyService.Instance.DeleteLobbyAsync(joinedLobby.Id);
+
+                throw;
             }
             catch (LobbyServiceException e)
             {
                 Debug.Log("no lobby found: " + e.Message);
-                await CreateLobby();
+                sessionInfoMessage.text = "No lobby found. Creating new lobby...";
+                await CreateLobby(ct);
                 Debug.Log(joinedLobby);
                 Debug.Log(joinedLobby.Players.Count.ToString());
+                sessionInfoMessage.text = "Lobby created: " + joinedLobby.LobbyCode;
+                sessionInfoMessage.text = "Waiting for another player...";
             }
         }
 
@@ -109,6 +177,7 @@ namespace LobbyManagement
                 try
                 {
                     Debug.Log("Create Relay");
+                    sessionInfoMessage.text = "Creating Relay...";
                     string relayCode = await _sessionMaker.CreateRelay();
                     Lobby lobby = await LobbyService.Instance.UpdateLobbyAsync(
                         joinedLobby.Id, new UpdateLobbyOptions
@@ -127,7 +196,7 @@ namespace LobbyManagement
             }
         }
 
-        public async UniTask HandleLobbyPolling()
+        public async UniTask HandleLobbyPolling(CancellationToken ct)
         {
             bool isTaskCompleted = false;
             bool isJoinningGuest = false;
@@ -135,7 +204,20 @@ namespace LobbyManagement
             {
                 if(joinedLobby == null){continue;}
 
-                joinedLobby = await LobbyService.Instance.GetLobbyAsync(joinedLobby.Id);
+                try
+                {
+                    joinedLobby = await LobbyService.Instance.GetLobbyAsync(joinedLobby.Id);
+                    ct.ThrowIfCancellationRequested();
+                }
+                catch (OperationCanceledException e)
+                {
+                    Debug.Log("Canceled");
+                    if (joinedLobby != null)
+                    {
+                        await LobbyService.Instance.DeleteLobbyAsync(joinedLobby.Id);
+                    }
+                    throw;
+                }
 
                 if (isHost)
                 {
@@ -160,8 +242,10 @@ namespace LobbyManagement
                         string relayCode = joinedLobby.Data[KEY_RELAY_CODE].Value;
                         await _sessionMaker.JoinRelay(relayCode);
                         Debug.Log("Guest join relay : " + relayCode);
+                        sessionInfoMessage.text = "Guest join relay : " + relayCode;
                         joinedLobby = null;
                         isTaskCompleted = true;
+                        _lobbyFullMemberTcs.TrySetResult();
                     }
                 }
                 
@@ -169,15 +253,24 @@ namespace LobbyManagement
             }
         }
 
-        public async UniTask Heartbeat()
+        public async UniTask Heartbeat(CancellationToken ct)
         {
-            if (!isHost) {return;}
             while (joinedLobby != null)
             {
                 try
                 {
                     Debug.Log("Heartbeat sent");
                     await LobbyService.Instance.SendHeartbeatPingAsync(joinedLobby.Id);
+                    ct.ThrowIfCancellationRequested();
+                }
+                catch (OperationCanceledException e)
+                {
+                    Debug.Log("Canceled");
+                    if (joinedLobby != null)
+                    {
+                        await LobbyService.Instance.DeleteLobbyAsync(joinedLobby.Id);
+                    }
+                    throw;
                 }
                 catch (LobbyServiceException e)
                 {
@@ -185,14 +278,17 @@ namespace LobbyManagement
                 }
 
                 //15秒に1回Heartbeatを送る
-                await UniTask.Delay(TimeSpan.FromSeconds(25));
+                await UniTask.Delay(TimeSpan.FromSeconds(25), cancellationToken: ct);
             }
         }
 
-        public async UniTask IsJoinedFullMember()
+        public async UniTask IsJoinedFullMember(CancellationToken ct)
         {
+            Debug.Log("IsJoinedFullMember1");
+            sessionInfoMessage.text = "Waiting for another player...";
             //ロビー内のメンバーが2人になるまでawaitする
-            await _lobbyFullMemberTcs.Task;
+            await _lobbyFullMemberTcs.Task.AttachExternalCancellation(ct);//todo ここのキャンセルの書き方があってるのかわからない
+            Debug.Log("IsJoinedFullMember2");
         }
     }
 }

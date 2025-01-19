@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System;
+using UnityEngine;
 using UnityEngine.UI;
 
 namespace Hand
@@ -6,10 +7,16 @@ namespace Hand
     public class HitAreaVisualSwitcher : MonoBehaviour
     {
         [SerializeField] private Image hitAreaImage;
-        
-        public void SetHitAreaVisual(bool isOn)
+        [SerializeField]private BoxCollider2D hitAreaCollider;
+
+        public void SetHitAreaVisualize(bool isOn)
         {
             hitAreaImage.enabled = isOn;
+        }
+        
+        public void SetHitAreaColliderActive(bool isActive)
+        {
+            hitAreaCollider.enabled = isActive;
         }
     }
 }

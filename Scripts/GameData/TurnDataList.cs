@@ -18,6 +18,8 @@ namespace GameData
             OpponentSelectedCardType = opponentSelectedCardType;
             PlayerSelectedCardIndex = playerSelectedCardIndex;
             OpponentSelectedCardIndex = opponentSelectedCardIndex;
+            
+            // Debug.Log($"Player : {playerSelectedCardType}, {playerSelectedCardIndex} vs Opponent : {opponentSelectedCardType}, {opponentSelectedCardIndex}");
         }
 
         public int TurnNumber { get; }

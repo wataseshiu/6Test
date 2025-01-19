@@ -11,7 +11,16 @@ namespace UI
         {
             var index = (int)dialogType;
             var dialog = Instantiate(dialogObjects[index], transform);
-            dialog.GetComponent<IDialogObjectBase<T>>().param = param;
+            if (param != null)
+            {
+                dialog.GetComponent<IDialogObjectBase<T>>().param = param;
+            }
+            return dialog;
+        }
+        public GameObject CreateDialog(Dialog dialogType)
+        {
+            var index = (int)dialogType;
+            var dialog = Instantiate(dialogObjects[index], transform);
             return dialog;
         }
 
@@ -24,6 +33,8 @@ namespace UI
     public enum Dialog
     {
         Result,
-        TitleMenu
+        TitleMenu,
+        ConfigVolume,
+        CreateSession,
     }
 }
